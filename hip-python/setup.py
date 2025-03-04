@@ -110,14 +110,14 @@ def create_extension(name, sources):
         name,
         sources=sources,
         include_dirs=[ROCM_INC],
-        library_dirs=[ROCM_LIB],
+        # library_dirs=[ROCM_LIB],
         libraries=(
             []
             if HIP_PYTHON_RUNTIME_LINKING
             else [mod.lib for mod in HIP_MODULES]
         ),
         language="c",
-        extra_compile_args=EXTRA_COMPILE_ARGS + ["-D", "__half=uint16_t"],
+        extra_compile_args=EXTRA_COMPILE_ARGS + ["-D", "__half=uint16_t", "-Wno-error=int-conversion"],
     )
 
 
