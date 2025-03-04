@@ -164,14 +164,14 @@ def gather_ext_modules():
                 ("hip._hiprtc_helpers", ["./hip/_hiprtc_helpers.pyx"]),
             ],
         ),
-        Module("hiprtc"),
-        Module("hipblas"),
-        Module("hipsolver"),
-        Module("rccl"),
-        Module("hiprand"),
-        Module("hipfft"),
-        Module("hipsparse"),
-        Module("roctx"),
+        # Module("hiprtc"),
+        # Module("hipblas"),
+        # Module("hipsolver"),
+        # Module("rccl"),
+        # Module("hiprand"),
+        # Module("hipfft"),
+        # Module("hipsparse"),
+        # Module("roctx"),
     ]
 
     # process and check user-provided library names

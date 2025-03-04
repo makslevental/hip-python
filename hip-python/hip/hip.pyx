@@ -58256,10 +58256,10 @@ class hipDataType(_hipDataType__Base):
     HIP_C_64I = chip.HIP_C_64I
     HIP_R_64U = chip.HIP_R_64U
     HIP_C_64U = chip.HIP_C_64U
-    HIP_R_8F_E4M3 = chip.HIP_R_8F_E4M3
-    HIP_R_8F_E5M2 = chip.HIP_R_8F_E5M2
-    HIP_R_8F_E4M3_FNUZ = chip.HIP_R_8F_E4M3_FNUZ
-    HIP_R_8F_E5M2_FNUZ = chip.HIP_R_8F_E5M2_FNUZ
+    # HIP_R_8F_E4M3 = chip.HIP_R_8F_E4M3
+    # HIP_R_8F_E5M2 = chip.HIP_R_8F_E5M2
+    # HIP_R_8F_E4M3_FNUZ = chip.HIP_R_8F_E4M3_FNUZ
+    # HIP_R_8F_E5M2_FNUZ = chip.HIP_R_8F_E5M2_FNUZ
     @staticmethod
     def ctypes_type():
         """The type of the enum constants as ctypes type."""

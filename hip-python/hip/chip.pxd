@@ -8593,10 +8593,10 @@ cdef extern from "hip/hip_runtime.h":
         HIP_C_64I
         HIP_R_64U
         HIP_C_64U
-        HIP_R_8F_E4M3
-        HIP_R_8F_E5M2
-        HIP_R_8F_E4M3_FNUZ
-        HIP_R_8F_E5M2_FNUZ
+        # HIP_R_8F_E4M3
+        # HIP_R_8F_E5M2
+        # HIP_R_8F_E4M3_FNUZ
+        # HIP_R_8F_E5M2_FNUZ
 
     cdef enum hipLibraryPropertyType:
         HIP_LIBRARY_MAJOR_VERSION
