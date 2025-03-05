@@ -21,7 +21,7 @@
 # SOFTWARE.
 
 # Python dependencies required for development
-setuptools>=42
+setuptools>=75.8.2
 cython
 wheel
 build

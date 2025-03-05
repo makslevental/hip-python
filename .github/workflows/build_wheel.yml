@@ -1,0 +1,217 @@
+name: "Build Hip_Python Upstream bindings wheel"
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  # A PR number if a pull request and otherwise the commit hash. This cancels
+  # queued and in-progress runs for the same PR (presubmit) or commit
+  # (postsubmit). The workflow name is prepended to avoid conflicts between
+  # different workflows.
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  PIP_FIND_LINKS: "https://github.com/llvm/eudsl/releases/expanded_assets/dev https://github.com/makslevental/mlir-wheels/releases/expanded_assets/latest"
+
+jobs:
+  build:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on: ["ubuntu-22.04", "macos-14", "macos-13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include: [
+          # {runs-on: "ubuntu-22.04", name: "ubuntu_x86_64", os: "ubuntu", arch: "x86_64"},
+          {runs-on: "ubuntu-22.04", name: "manylinux_x86_64", os: "almalinux", arch: "x86_64", container: "quay.io/pypa/manylinux_2_28_x86_64"},
+          # {runs-on: "ubuntu-22.04-arm", name: "ubuntu_aarch64", os: "ubuntu", arch: "aarch64"},
+          # {runs-on: "ubuntu-22.04-arm", name: "manylinux_aarch64", os: "almalinux", arch: x86_64, container: "quay.io/pypa/manylinux_2_28_aarch64"},
+          {runs-on: "macos-14", name: "macos_arm64", os: "macos", arch: "arm64"},
+          {runs-on: "macos-13", name: "macos_x86_64", os: "macos", arch: "x86_64"},
+        ]
+
+    runs-on: ${{ matrix.runs-on }}
+
+    name: "Build ${{ matrix.name }} ${{ matrix.python-version }}"
+
+    defaults:
+      run:
+        shell: bash
+
+    permissions:
+      id-token: write
+      contents: write
+
+    env:
+      # either the PR number or `branch-N` where N always increments
+      cache-key: "hip_python_${{ matrix.name }}_${{ matrix.python-version }}_${{ format('{0}-{1}', github.ref_name, github.run_number) }}"
+
+    container:
+      image: ${{ matrix.container }}
+
+    steps:
+      - name: "Check out repository"
+        uses: actions/checkout@v4.2.2
+
+      - name: "Setup base"
+        uses: ./.github/actions/setup_base
+        id: setup_base
+        with:
+          cache-key: ${{ env.cache-key }}
+          restore-key: "hip_python_${{ matrix.name }}_${{ matrix.python-version }}_"
+          os: ${{ matrix.os }}
+          arch: ${{ matrix.arch }}
+          python-version: ${{ matrix.python-version }}
+
+      - if: ${{ matrix.os == 'almalinux' }}
+        run: |
+          git config --global --add safe.directory /__w/hip-python/hip-python
+
+      - name: "Build"
+        run: |
+          
+          set -x
+          
+          export HIP_PYTHON_SRC_DIR="$PWD"
+          
+          wget --quiet https://github.com/nod-ai/TheRock/releases/download/mainline-snapshot/therock-dist-gfx110X-dgpu.tar.gz
+          tar -xf ./therock-dist-gfx110X-dgpu.tar.gz ./include
+          export ROCM_PATH=$PWD
+          
+          ccache -z
+          
+          export CC="ccache $CC"
+          export CXX="ccache $CXX"
+          
+          $python3_command -m pip install -r hip-python/requirements.txt
+          $python3_command _render_update_version.py
+          $python3_command -m pip wheel ./hip-python -w "$HIP_PYTHON_SRC_DIR/wheelhouse" -v --no-build-isolation
+          ls -lh $HIP_PYTHON_SRC_DIR/wheelhouse
+          if [[ "${{ matrix.os }}" == "almalinux" ]]; then
+            $python3_command -m pip install auditwheel 
+            $python3_command -m auditwheel repair $HIP_PYTHON_SRC_DIR/wheelhouse/hip_python*whl -w $HIP_PYTHON_SRC_DIR/wheelhouse
+          fi
+          
+          ccache -s
+
+      - name: Upload artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hip_python_${{ matrix.name }}_${{ matrix.python-version }}_artifact
+          path: wheelhouse/hip_python*whl
+          if-no-files-found: error
+
+      - name: "Save cache"
+        uses: actions/cache/save@v4.2.0
+        if: ${{ !cancelled() }}
+        with:
+          path: ${{ steps.setup_base.outputs.cache-dir }}
+          key: ${{ env.cache-key }}
+
+  test:
+
+    needs: [build]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on: ["ubuntu-22.04", "macos-14", "macos-13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include: [
+          # {runs-on: "ubuntu-22.04", name: "ubuntu_x86_64", os: "ubuntu", arch: "x86_64"},
+          {runs-on: "ubuntu-22.04", name: "manylinux_x86_64", os: "almalinux", arch: "x86_64", container: "quay.io/pypa/manylinux_2_28_x86_64"},
+          # {runs-on: "ubuntu-22.04-arm", name: "ubuntu_aarch64", os: "ubuntu", arch: "aarch64"},
+          {runs-on: "macos-14", name: "macos_arm64", os: "macos", arch: "arm64"},
+          {runs-on: "macos-13", name: "macos_x86_64", os: "macos", arch: "x86_64"},
+        ]
+
+    runs-on: ${{ matrix.runs-on }}
+
+    name: "Test ${{ matrix.name }} ${{ matrix.python-version }}"
+
+    defaults:
+      run:
+        shell: bash
+
+    container:
+      image: ${{ matrix.container }}
+
+    steps:
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4.1.8
+        with:
+          name: hip_python_${{ matrix.name }}_${{ matrix.python-version }}_artifact
+          path: wheelhouse
+
+      - name: "Install Python"
+        uses: actions/setup-python@v4
+        if: ${{ startsWith(matrix.os, 'macos') || startsWith(matrix.os, 'windows') || startsWith(matrix.os, 'ubuntu') }}
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: "Python deps"
+        shell: bash
+        run: |
+          python3_command=""
+          if (command -v python${{ matrix.python-version }} &> /dev/null); then
+            python3_command="python${{ matrix.python-version }}"
+          elif (command -v python3 &> /dev/null); then
+            python3_command="python3"
+          elif (command -v python &> /dev/null); then
+            python3_command="python"
+          fi 
+          echo "python3_command=$python3_command" >> $GITHUB_ENV
+
+      - name: "Test"
+        run: |
+          # pip debug --verbose
+          $python3_command -m pip install hip-python -f $PWD/wheelhouse
+          $python3_command -c "import hip; print(dir(hip))"
+
+  release:
+
+    needs: [test]
+    runs-on: ubuntu-22.04
+    steps:
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4.1.8
+        with:
+          pattern: hip_python_*
+          path: wheelhouse
+          merge-multiple: true
+
+      - name: Release current commit
+        uses: ncipollo/release-action@v1.16.0
+        with:
+          artifacts: "wheelhouse/*.whl"
+          token: "${{ secrets.GITHUB_TOKEN }}"
+          tag: "latest"
+          name: "latest"
+          removeArtifacts: false
+          allowUpdates: true
+          replacesArtifacts: true
+          makeLatest: true
+          omitBody: true
+
+      - name: Release current commit
+        uses: ncipollo/release-action@v1.16.0
+        with:
+          owner: makslevental
+          repo: wheels
+          artifacts: "wheelhouse/*.whl"
+          token: "${{ secrets.WHEELS_RELEASE }}"
+          tag: "i"
+          name: "i"
+          removeArtifacts: false
+          allowUpdates: true
+          replacesArtifacts: true
+          makeLatest: true
+          omitBody: true
+          artifactErrorsFailBuild: false
